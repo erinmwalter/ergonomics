@@ -1,0 +1,17 @@
+flowchart LR
+    A[Webcam Video Input] --> E
+    B[YOLOv11 Pose Detection] --> E
+    E[Track Left/Right Hand Positions]
+    E --> F[Check Zone Compliance]
+    F --> G{Hand in Defined Zone?}
+    G -->|Yes| H[Log Entry Event]
+    G -->|No| I[Log Exit Event]
+    H --> J[Store Event Data]
+    I --> J
+    J --> K[Calculate Compliance Metrics]
+    K --> L[Compare Against Gold Standard]
+    L --> O[Display Results to User]
+    
+    P[Zone Configuration] --> F
+    Q[Gold Standard Definition] --> L
+    R[Historical Data] --> K
