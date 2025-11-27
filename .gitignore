@@ -87,6 +87,8 @@ yolo11m-pose.pt
 # Uploaded files
 uploads/
 static/uploads/
+frontend/public/images/
+public/images/
 
 # Webpack
 .cache/
