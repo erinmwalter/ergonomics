@@ -15,6 +15,32 @@ SKELETON = [
     [13, 15], [15, 17]   # Right leg
 ]
 
+def draw_hand_boxes(img, keypoints, conf_threshold=0.5, box_size=40):
+    """Draw bounding boxes around left & right hands."""
+    for kp in keypoints:
+        # Left wrist = index 9
+        # Right wrist = index 10
+        for idx, color in [(9, (0, 255, 0)), (10, (0, 0, 255))]:
+            if idx < len(kp):
+                x, y, conf = kp[idx]
+                
+                if conf > conf_threshold:
+                    x, y = int(x), int(y)
+
+                    # Draw box around hand
+                    cv2.rectangle(
+                        img,
+                        (x - box_size, y - box_size),
+                        (x + box_size, y + box_size),
+                        color,
+                        2
+                    )
+
+                    # Optional: Draw center dot
+                    cv2.circle(img, (x, y), 4, color, -1)
+
+    return img
+
 def draw_pose(img, keypoints, conf_threshold=0.5):
     """Draw stick figure on detected person"""
     for kp in keypoints:
@@ -66,7 +92,8 @@ while cap.isOpened():
                     person_kp.append([x, y, conf])
                 kp_data.append(person_kp)
             
-            frame = draw_pose(frame, kp_data)
+           #frame = draw_pose(frame, kp_data)
+            frame = draw_hand_boxes(frame, kp_data)
     
     # Display the frame
     cv2.imshow('YOLOv11 Pose Detection', frame)
