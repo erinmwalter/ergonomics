@@ -237,7 +237,6 @@ class DatabaseService:
         return result
     
     def get_process_steps(self, process_id: int, active_only: bool = True) -> List[Dict[str, Any]]:
-        """Get all steps for a process with zone information"""
         query = """
         SELECT ps.*, z."ZoneName", z."Color" 
         FROM public."ProcessSteps" ps
@@ -251,7 +250,6 @@ class DatabaseService:
         return self.execute_query(query, (process_id,))
     
     def update_process_step(self, step_id: int, **kwargs) -> bool:
-        """Update process step fields"""
         valid_fields = ['StepNumber', 'StepName', 'TargetZoneId', 'Duration', 'Description', 'IsActive']
         updates = []
         params = []
@@ -271,11 +269,9 @@ class DatabaseService:
         return rows_affected > 0
     
     def delete_process_step(self, step_id: int) -> bool:
-        """Soft delete process step (set is_active = false)"""
         return self.update_process_step(step_id, IsActive=False)
     
     def save_process_steps(self, process_id: int, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Replace all steps for a process with new steps"""
         with self.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute("UPDATE public.\"ProcessSteps\" SET \"IsActive\" = false WHERE \"ProcessId\" = %s", (process_id,))
@@ -292,6 +288,119 @@ class DatabaseService:
                     )
         
         return self.get_process_steps(process_id)
+    
+    def save_tracking_session(self, session_id: str, environment_id: int, process_id: int,
+                             start_time, end_time, total_duration: float, status: str,
+                             overall_adherence: float, steps_completed: int, 
+                             steps_expected: int) -> int:
+        query = """
+        INSERT INTO tracking_sessions 
+        ("SessionId", "EnvironmentId", "ProcessId", "StartTime", "EndTime", 
+         "TotalDuration", "Status", "OverallAdherence", "StepsCompleted", 
+         "StepsExpected", "CreatedAt")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        RETURNING "Id"
+        """
+        params = (session_id, environment_id, process_id, start_time, end_time,
+                 total_duration, status, overall_adherence, steps_completed, steps_expected)
+        result = self.execute_insert(query, params)
+        logger.info(f"Saved tracking session: {session_id} (ID: {result})")
+        return result
+    
+    def save_step_event(self, session_id: str, step_number: int, step_name: str,
+                       zone_name: str, target_duration: float, actual_duration: float,
+                       step_adherence: float, completed_at) -> int:
+        query = """
+        INSERT INTO step_events
+        ("SessionId", "StepNumber", "StepName", "ZoneName", "TargetDuration",
+         "ActualDuration", "StepAdherence", "CompletedAt", "CreatedAt")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        RETURNING "Id"
+        """
+        params = (session_id, step_number, step_name, zone_name, target_duration,
+                 actual_duration, step_adherence, completed_at)
+        result = self.execute_insert(query, params)
+        return result
+    
+    def get_tracking_sessions(self, environment_id: int = None, process_id: int = None,
+                             start_date = None, end_date = None) -> List[Dict[str, Any]]:
+        query = "SELECT * FROM tracking_sessions WHERE 1=1"
+        params = []
+        
+        if environment_id:
+            query += " AND \"EnvironmentId\" = %s"
+            params.append(environment_id)
+        if process_id:
+            query += " AND \"ProcessId\" = %s"
+            params.append(process_id)
+        if start_date:
+            query += " AND \"StartTime\" >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND \"StartTime\" <= %s"
+            params.append(end_date)
+        
+        query += " ORDER BY \"StartTime\" DESC"
+        
+        return self.execute_query(query, tuple(params) if params else None)
+    
+    def get_step_events_for_session(self, session_id: str) -> List[Dict[str, Any]]:
+        query = """
+        SELECT * FROM step_events 
+        WHERE "SessionId" = %s 
+        ORDER BY "StepNumber" ASC
+        """
+        return self.execute_query(query, (session_id,))
+    
+    def get_adherence_statistics(self, environment_id: int = None, process_id: int = None,
+                                 days: int = 7) -> Dict[str, Any]:
+        query = """
+        SELECT 
+            COUNT(*) as total_sessions,
+            AVG("OverallAdherence") as avg_adherence,
+            MIN("OverallAdherence") as min_adherence,
+            MAX("OverallAdherence") as max_adherence,
+            SUM(CASE WHEN "Status" = 'completed' THEN 1 ELSE 0 END) as completed_count,
+            SUM(CASE WHEN "Status" = 'stopped' THEN 1 ELSE 0 END) as stopped_count
+        FROM tracking_sessions
+        WHERE "StartTime" >= CURRENT_TIMESTAMP - INTERVAL '%s days'
+        """
+        params = [days]
+        
+        if environment_id:
+            query += " AND \"EnvironmentId\" = %s"
+            params.append(environment_id)
+        if process_id:
+            query += " AND \"ProcessId\" = %s"
+            params.append(process_id)
+        
+        results = self.execute_query(query, tuple(params))
+        return results[0] if results else {}
+    
+    def get_problem_steps(self, process_id: int = None, days: int = 7) -> List[Dict[str, Any]]:
+        query = """
+        SELECT 
+            se."StepName",
+            se."ZoneName",
+            COUNT(*) as attempt_count,
+            AVG(se."ActualDuration" - se."TargetDuration") as avg_time_deviation,
+            AVG(se."StepAdherence") as avg_adherence
+        FROM step_events se
+        JOIN tracking_sessions ts ON se."SessionId" = ts."SessionId"
+        WHERE ts."StartTime" >= CURRENT_TIMESTAMP - INTERVAL '%s days'
+        """
+        params = [days]
+        
+        if process_id:
+            query += " AND ts.\"ProcessId\" = %s"
+            params.append(process_id)
+        
+        query += """
+        GROUP BY se."StepName", se."ZoneName"
+        ORDER BY avg_adherence ASC
+        """
+        
+        return self.execute_query(query, tuple(params))
 
 # FOR TESTING PURPOSES ONLY - TEST DIFFERENT ASPECTS OF THE DATABASE HERE (WILL NOT BE USED IN APP)
 if __name__ == "__main__":

@@ -65,7 +65,7 @@ class ProcessAnalysisService:
         print(f"Started tracking process: {self.current_process['ProcessName']}")
         print(f"Expected sequence: {[step['StepName'] for step in self.process_steps]}")
     
-    def stop_tracking(self):
+    def stop_tracking(self, session_id: str = None):
         if not self.is_tracking:
             return None
             
@@ -75,8 +75,54 @@ class ProcessAnalysisService:
         
         results = self.calculate_adherence_metrics(total_time)
         
-        # TODO: Save session to database
-        # self.save_session_to_db(results)
+        if session_id:
+            try:
+                start_datetime = datetime.fromtimestamp(self.session_data['start_time'])
+                end_datetime = datetime.fromtimestamp(end_time)
+                
+                status = 'completed' if results['completed_steps'] == results['total_steps'] else 'stopped'
+                
+                self.db.save_tracking_session(
+                    session_id=session_id,
+                    environment_id=self.current_process.get('EnvironmentId'),
+                    process_id=self.current_process['Id'],
+                    start_time=start_datetime,
+                    end_time=end_datetime,
+                    total_duration=total_time,
+                    status=status,
+                    overall_adherence=results['overall_adherence'],
+                    steps_completed=results['completed_steps'],
+                    steps_expected=results['total_steps']
+                )
+                
+                for event in self.session_data['step_events']:
+                    step_adherence = 100
+                    if event['target_duration'] > 0:
+                        time_ratio = event['duration'] / event['target_duration']
+                        if time_ratio <= 1.2:
+                            step_adherence = 100
+                        elif time_ratio <= 2.0:
+                            step_adherence = max(0, 100 - (time_ratio - 1) * 100)
+                        else:
+                            step_adherence = 0
+                    
+                    completed_datetime = datetime.fromtimestamp(event['time'])
+                    
+                    self.db.save_step_event(
+                        session_id=session_id,
+                        step_number=event['step_number'],
+                        step_name=event['step_name'],
+                        zone_name=event['zone_hit'],
+                        target_duration=event['target_duration'],
+                        actual_duration=event['duration'],
+                        step_adherence=step_adherence,
+                        completed_at=completed_datetime
+                    )
+                
+                print(f"Session {session_id} saved to database")
+                
+            except Exception as e:
+                print(f"Error saving session to database: {e}")
         
         print(f"Tracking stopped. Total time: {total_time:.2f}s")
         return results
@@ -301,7 +347,7 @@ if __name__ == "__main__":
             elif key == ord('s') and not service.is_tracking:
                 service.start_tracking()
             elif key == ord('x') and service.is_tracking:
-                results = service.stop_tracking()
+                results = service.stop_tracking(session_id)
                 if results:
                     print("\nProcess Analysis Results:")
                     print(f"Overall Adherence: {results['overall_adherence']}%")
