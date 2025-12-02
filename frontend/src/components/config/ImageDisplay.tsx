@@ -80,8 +80,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
         >
           <div className="text-center text-muted">
             <p><strong>Image not found</strong></p>
-            <p>Expected: {getImageSrc(imagePath)}</p>
-            <p>Place your image in the public folder</p>
           </div>
         </div>
       ) : (
@@ -101,7 +99,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
             }}
           />
           
-          {/* Loading overlay */}
           {!imageLoaded && !imageError && (
             <div 
               className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
@@ -116,7 +113,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
             </div>
           )}
           
-          {/* Zone overlays will be rendered here */}
           {imageLoaded && children}
         </>
       )}

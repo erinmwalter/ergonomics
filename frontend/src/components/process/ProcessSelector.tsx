@@ -27,7 +27,6 @@ const ProcessSelector: React.FC<ProcessSelectorProps> = ({
     } catch (err) {
       console.error('Failed to load processes:', err);
       setError('Failed to load processes');
-      // Fallback with empty array
       setProcesses([]);
     }
     setLoading(false);

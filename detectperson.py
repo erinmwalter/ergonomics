@@ -1,8 +1,7 @@
 import cv2
 from ultralytics import YOLO
 
-# Load YOLOv11 pose model
-model = YOLO('yolo11n-pose.pt')  # Use yolo11s-pose.pt, yolo11m-pose.pt for better accuracy
+model = YOLO('yolo11n-pose.pt')
 
 # Skeleton connections for drawing stick figure
 SKELETON = [
@@ -16,7 +15,6 @@ SKELETON = [
 ]
 
 def draw_hand_boxes(img, keypoints, conf_threshold=0.5, box_size=40):
-    """Draw bounding boxes around left & right hands."""
     for kp in keypoints:
         # Left wrist = index 9
         # Right wrist = index 10
@@ -42,7 +40,6 @@ def draw_hand_boxes(img, keypoints, conf_threshold=0.5, box_size=40):
     return img
 
 def draw_pose(img, keypoints, conf_threshold=0.5):
-    """Draw stick figure on detected person"""
     for kp in keypoints:
         # Draw keypoints
         for i, (x, y, conf) in enumerate(kp):

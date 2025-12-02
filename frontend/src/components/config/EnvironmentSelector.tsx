@@ -27,8 +27,7 @@ const EnvironmentSelector: React.FC<EnvironmentSelectorProps> = ({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load environments');
       console.error('Failed to load environments:', err);
-      +
-      // Fallback to placeholder data just fopr testing
+      //TESTING ONLY - placeholder until the database is set up and running
       setEnvironments([
         { Id: 1, Name: 'Workstation A', ImagePath: '/uploads/station_a.jpg', CreatedAt: '2025-11-26', CreatedBy: 'admin', IsActive: true },
         { Id: 2, Name: 'Assembly Line 2', ImagePath: '/uploads/line_2.jpg', CreatedAt: '2025-11-26', CreatedBy: 'admin', IsActive: true }

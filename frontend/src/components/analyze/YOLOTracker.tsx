@@ -16,7 +16,6 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Start webcam
   const startWebcam = useCallback(async () => {
     try {
       console.log('YOLOTracker: Starting webcam...');
@@ -36,7 +35,6 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
     }
   }, []);
 
-  // Stop webcam
   const stopWebcam = useCallback(() => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
@@ -48,7 +46,6 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
     console.log('YOLOTracker: Webcam stopped');
   }, [stream]);
 
-  // Start webcam when component mounts
   useEffect(() => {
     startWebcam();
     return () => stopWebcam();
@@ -62,7 +59,6 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
         </div>
       )}
       
-      {/* Main video feed - ALWAYS visible */}
       <video
         ref={videoRef}
         autoPlay
@@ -74,17 +70,15 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
         }}
       />
       
-      {/* Overlay canvas for YOLO detection (when we add it back) */}
       <canvas
         ref={canvasRef}
         className="position-absolute top-0 start-0"
         style={{ 
           pointerEvents: 'none',
-          display: 'none' // Hidden for now until we fix YOLO
+          display: 'none'
         }}
       />
       
-      {/* Status indicators */}
       <div className="position-absolute top-0 start-0 p-2">
         {stream && (
           <span className="badge bg-success">Camera Active</span>

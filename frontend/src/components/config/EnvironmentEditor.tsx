@@ -29,7 +29,6 @@ const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
       setZones(data);
     } catch (error) {
       console.error('Failed to load zones:', error);
-      // Fallback placeholder zones for testing
       setZones([
         { Id: 1, EnvironmentId: environment.Id, ZoneName: 'Button A', Xstart: 100, Ystart: 100, Xend: 200, Yend: 200, Color: '#FF0000', CreatedAt: '2025-11-26', CreatedBy: 'admin', IsActive: true },
         { Id: 2, EnvironmentId: environment.Id, ZoneName: 'Safety Switch', Xstart: 300, Ystart: 150, Xend: 400, Yend: 250, Color: '#00FF00', CreatedAt: '2025-11-26', CreatedBy: 'admin', IsActive: true }
@@ -125,10 +124,8 @@ const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
         </CardBody>
       </Card>
 
-      {/* Main Editor Area */}
       <Row>
         <Col lg={9}>
-          {/* Image Display + Zone Overlay */}
           <Card>
             <CardBody>
               <div className="d-flex justify-content-between align-items-center mb-3">
@@ -143,7 +140,6 @@ const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
                 alt={`Environment: ${environment.Name}`}
                 onImageLoad={handleImageLoad}
               >
-                {/* Zone overlays using ZoneBox components */}
                 <div className="position-absolute top-0 start-0">
                   {zones.map(zone => (
                     <ZoneBox
@@ -169,7 +165,6 @@ const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
         </Col>
         
         <Col lg={3}>
-          {/* Zone Properties Panel */}
           <ZonePropertiesPanel
             zone={selectedZone}
             onZoneUpdate={handleZoneUpdate}

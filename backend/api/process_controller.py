@@ -4,10 +4,8 @@ from database import DatabaseService
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
 process_bp = Blueprint('process', __name__, url_prefix='/api')
 
-# Initialize database
 db = DatabaseService(database="postgres")
 
 @process_bp.route('/environments/<int:env_id>/processes', methods=['GET'])
@@ -30,7 +28,6 @@ def create_process():
         if not all(k in data for k in required_fields):
             return jsonify({"error": "Missing required fields"}), 400
         
-        # Validate duration is positive
         if data['Duration'] <= 0:
             return jsonify({"error": "Duration must be positive"}), 400
         
@@ -67,7 +64,6 @@ def update_process(process_id):
     try:
         data = request.get_json()
         
-        # Validate duration if provided
         if 'Duration' in data and data['Duration'] <= 0:
             return jsonify({"error": "Duration must be positive"}), 400
         
@@ -116,17 +112,14 @@ def save_process_steps(process_id):
         
         steps = data['steps']
         
-        # Validate each step has required fields
         required_step_fields = ['StepName', 'TargetZoneId', 'Duration', 'Description']
         for i, step in enumerate(steps):
             if not all(k in step for k in required_step_fields):
                 return jsonify({"error": f"Step {i+1} missing required fields"}), 400
             
-            # Validate duration is positive
             if step['Duration'] <= 0:
                 return jsonify({"error": f"Step {i+1} duration must be positive"}), 400
         
-        # Save steps (this replaces all existing steps)
         updated_steps = db.save_process_steps(process_id, steps)
         return jsonify(updated_steps), 200
         
@@ -134,7 +127,6 @@ def save_process_steps(process_id):
         logger.error(f"Error saving steps for process {process_id}: {e}")
         return jsonify({"error": "Failed to save process steps"}), 500
 
-# Health check for process service
 @process_bp.route('/processes/health', methods=['GET'])
 def process_health():
     """Health check for process endpoints"""

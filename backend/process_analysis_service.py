@@ -29,7 +29,6 @@ class ProcessAnalysisService:
         self.hand_offset_pixels = 30
         
     def load_process(self, environment_id: int, process_id: int):
-        """Load process and zones for tracking"""
         try:
             self.current_process = self.db.get_process_by_id(process_id)
             if not self.current_process:
@@ -50,7 +49,6 @@ class ProcessAnalysisService:
             return False
     
     def start_tracking(self):
-        """Start process tracking session"""
         if not self.current_process or not self.process_steps:
             raise ValueError("No process loaded. Call load_process() first.")
             
@@ -67,8 +65,7 @@ class ProcessAnalysisService:
         print(f"Started tracking process: {self.current_process['ProcessName']}")
         print(f"Expected sequence: {[step['StepName'] for step in self.process_steps]}")
     
-    def stop_tracking(self):
-        """Stop tracking and return results"""
+    def stop_tracking(self, session_id: str = None):
         if not self.is_tracking:
             return None
             
@@ -78,17 +75,61 @@ class ProcessAnalysisService:
         
         results = self.calculate_adherence_metrics(total_time)
         
-        # TODO: Save session to database
-        # self.save_session_to_db(results)
+        if session_id:
+            try:
+                start_datetime = datetime.fromtimestamp(self.session_data['start_time'])
+                end_datetime = datetime.fromtimestamp(end_time)
+                
+                status = 'completed' if results['completed_steps'] == results['total_steps'] else 'stopped'
+                
+                self.db.save_tracking_session(
+                    session_id=session_id,
+                    environment_id=self.current_process.get('EnvironmentId'),
+                    process_id=self.current_process['Id'],
+                    start_time=start_datetime,
+                    end_time=end_datetime,
+                    total_duration=total_time,
+                    status=status,
+                    overall_adherence=results['overall_adherence'],
+                    steps_completed=results['completed_steps'],
+                    steps_expected=results['total_steps']
+                )
+                
+                for event in self.session_data['step_events']:
+                    step_adherence = 100
+                    if event['target_duration'] > 0:
+                        time_ratio = event['duration'] / event['target_duration']
+                        if time_ratio <= 1.2:
+                            step_adherence = 100
+                        elif time_ratio <= 2.0:
+                            step_adherence = max(0, 100 - (time_ratio - 1) * 100)
+                        else:
+                            step_adherence = 0
+                    
+                    completed_datetime = datetime.fromtimestamp(event['time'])
+                    
+                    self.db.save_step_event(
+                        session_id=session_id,
+                        step_number=event['step_number'],
+                        step_name=event['step_name'],
+                        zone_name=event['zone_hit'],
+                        target_duration=event['target_duration'],
+                        actual_duration=event['duration'],
+                        step_adherence=step_adherence,
+                        completed_at=completed_datetime
+                    )
+                
+                print(f"Session {session_id} saved to database")
+                
+            except Exception as e:
+                print(f"Error saving session to database: {e}")
         
         print(f"Tracking stopped. Total time: {total_time:.2f}s")
         return results
     
     def get_hand_positions(self, keypoints, confidences):
-        """Extract hand positions from pose keypoints"""
         hands = {'left': None, 'right': None}
         
-        # YOLO pose keypoint indices
         LEFT_WRIST = 9   # Left wrist
         RIGHT_WRIST = 10 # Right wrist
         
@@ -96,10 +137,8 @@ class ProcessAnalysisService:
             person_kp = keypoints[person_idx]
             person_conf = confidences[person_idx]
             
-            # Left hand (from left wrist + offset)
             if LEFT_WRIST < len(person_kp) and person_conf[LEFT_WRIST] > self.conf_threshold:
                 wrist_x, wrist_y = person_kp[LEFT_WRIST]
-                # Add offset to approximate hand position
                 hand_x = wrist_x + self.hand_offset_pixels
                 hand_y = wrist_y + self.hand_offset_pixels
                 hands['left'] = (int(hand_x), int(hand_y))
@@ -107,8 +146,7 @@ class ProcessAnalysisService:
             # Right hand (from right wrist + offset) 
             if RIGHT_WRIST < len(person_kp) and person_conf[RIGHT_WRIST] > self.conf_threshold:
                 wrist_x, wrist_y = person_kp[RIGHT_WRIST]
-                # Add offset to approximate hand position
-                hand_x = wrist_x - self.hand_offset_pixels  # Negative for right hand
+                hand_x = wrist_x - self.hand_offset_pixels 
                 hand_y = wrist_y + self.hand_offset_pixels
                 hands['right'] = (int(hand_x), int(hand_y))
         
@@ -128,46 +166,35 @@ class ProcessAnalysisService:
         if not self.is_tracking:
             return frame
             
-        # Run YOLO pose detection
         results = self.model(frame, verbose=False)
         
-        # Draw zones on frame
         frame = self.draw_zones(frame)
         
-        # Process pose detection results
         for result in results:
             if result.keypoints is not None:
                 keypoints = result.keypoints.xy.cpu().numpy()
                 confidences = result.keypoints.conf.cpu().numpy()
                 
-                # Get hand positions
                 hands = self.get_hand_positions(keypoints, confidences)
                 
-                # Draw hands
                 frame = self.draw_hands(frame, hands)
                 
-                # Check zone collisions and process steps
                 self.check_step_progress(hands)
         
-        # Draw process status
         frame = self.draw_process_status(frame)
         
         return frame
     
     def draw_zones(self, frame):
-        """Draw zones on the frame"""
         for zone in self.current_zones:
-            # Zone rectangle
             start_point = (zone['Xstart'], zone['Ystart'])
             end_point = (zone['Xend'], zone['Yend'])
             
-            # Convert hex color to BGR
             color_hex = zone['Color'].lstrip('#')
-            color_bgr = tuple(int(color_hex[i:i+2], 16) for i in (4, 2, 0))  # BGR format
+            color_bgr = tuple(int(color_hex[i:i+2], 16) for i in (4, 2, 0))
             
             cv2.rectangle(frame, start_point, end_point, color_bgr, 2)
             
-            # Zone label
             cv2.putText(frame, zone['ZoneName'], 
                        (zone['Xstart'], zone['Ystart'] - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
@@ -178,7 +205,7 @@ class ProcessAnalysisService:
         """Draw hand positions on frame"""
         for hand_type, pos in hands.items():
             if pos:
-                color = (0, 255, 0) if hand_type == 'left' else (0, 0, 255)  # Green for left, red for right
+                color = (0, 255, 0) if hand_type == 'left' else (0, 0, 255)
                 cv2.circle(frame, pos, 8, color, -1)
                 cv2.putText(frame, f"{hand_type.upper()}", 
                            (pos[0] - 20, pos[1] - 15),
@@ -187,22 +214,18 @@ class ProcessAnalysisService:
         return frame
     
     def draw_process_status(self, frame):
-        """Draw current process status on frame"""
         if not self.process_steps:
             return frame
             
         current_step_idx = self.session_data['current_step']
         
-        # Status background
         overlay = frame.copy()
         cv2.rectangle(overlay, (10, 10), (400, 120), (0, 0, 0), -1)
         frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
         
-        # Process name
         cv2.putText(frame, f"Process: {self.current_process['ProcessName']}", 
                    (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
-        # Current step
         if current_step_idx < len(self.process_steps):
             current_step = self.process_steps[current_step_idx]
             cv2.putText(frame, f"Step {current_step_idx + 1}: {current_step['StepName']}", 
@@ -213,25 +236,22 @@ class ProcessAnalysisService:
             cv2.putText(frame, "Process Complete!", 
                        (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         
-        # Progress
         progress = f"Progress: {current_step_idx}/{len(self.process_steps)}"
         cv2.putText(frame, progress, (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
         
         return frame
     
     def check_step_progress(self, hands):
-        """Check if current step is completed based on hand positions"""
         if not self.is_tracking or not self.process_steps:
             return
             
         current_step_idx = self.session_data['current_step']
         if current_step_idx >= len(self.process_steps):
-            return  # Process already complete
+            return 
             
         current_step = self.process_steps[current_step_idx]
         target_zone_id = current_step['TargetZoneId']
         
-        # Find the target zone
         target_zone = None
         for zone in self.current_zones:
             if zone['Id'] == target_zone_id:
@@ -241,19 +261,16 @@ class ProcessAnalysisService:
         if not target_zone:
             return
             
-        # Check if either hand is in the target zone
         hit_detected = False
         for hand_type, hand_pos in hands.items():
             if hand_pos and self.check_zone_collision(hand_pos, target_zone):
                 hit_detected = True
                 break
         
-        # Record the hit and advance step if needed
         if hit_detected:
             current_time = time.time()
             step_time = current_time - (self.session_data['step_events'][-1]['time'] if self.session_data['step_events'] else self.session_data['start_time'])
             
-            # Record step completion
             step_event = {
                 'step_number': current_step_idx + 1,
                 'step_name': current_step['StepName'],
@@ -269,27 +286,23 @@ class ProcessAnalysisService:
             print(f"Step {current_step_idx + 1} completed in {step_time:.2f}s (target: {current_step['Duration']}s)")
     
     def calculate_adherence_metrics(self, total_time):
-        """Calculate process adherence metrics"""
         if not self.session_data['step_events']:
             return {'adherence_score': 0, 'message': 'No steps completed'}
         
         total_steps = len(self.process_steps)
         completed_steps = len(self.session_data['step_events'])
         
-        # Step completion adherence
         completion_adherence = (completed_steps / total_steps) * 100
         
-        # Timing adherence
         timing_scores = []
         for event in self.session_data['step_events']:
             target_time = event['target_duration']
             actual_time = event['duration']
             
-            # Score based on how close to target time (100% if within 20% of target)
             time_ratio = actual_time / target_time
-            if time_ratio <= 1.2:  # Within 20% of target
+            if time_ratio <= 1.2: 
                 timing_score = 100
-            elif time_ratio <= 2.0:  # Within 100% of target
+            elif time_ratio <= 2.0: 
                 timing_score = max(0, 100 - (time_ratio - 1) * 100)
             else:
                 timing_score = 0
@@ -298,7 +311,6 @@ class ProcessAnalysisService:
         
         avg_timing_adherence = sum(timing_scores) / len(timing_scores) if timing_scores else 0
         
-        # Overall adherence (weighted average)
         overall_adherence = (completion_adherence * 0.7) + (avg_timing_adherence * 0.3)
         
         return {
@@ -312,11 +324,9 @@ class ProcessAnalysisService:
             'step_details': self.session_data['step_events']
         }
 
-# Example usage / testing
 if __name__ == "__main__":
     service = ProcessAnalysisService()
     
-    # Test loading a process (you'll need to have data in your database)
     if service.load_process(environment_id=1, process_id=1):
         cap = cv2.VideoCapture(0)
         
@@ -327,10 +337,8 @@ if __name__ == "__main__":
             if not ret:
                 break
             
-            # Process frame
             frame = service.process_frame(frame)
             
-            # Display frame
             cv2.imshow('Process Analysis', frame)
             
             key = cv2.waitKey(1) & 0xFF
@@ -339,7 +347,7 @@ if __name__ == "__main__":
             elif key == ord('s') and not service.is_tracking:
                 service.start_tracking()
             elif key == ord('x') and service.is_tracking:
-                results = service.stop_tracking()
+                results = service.stop_tracking(session_id)
                 if results:
                     print("\nProcess Analysis Results:")
                     print(f"Overall Adherence: {results['overall_adherence']}%")

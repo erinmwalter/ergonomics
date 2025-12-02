@@ -42,8 +42,7 @@ const ProcessConfig: React.FC = () => {
   };
 
   const handleCreateNewEnvironment = () => {
-    // For now, we don't need to create environments in process config
-    // Just show a message or do nothing
+    //TODO : Implement this
     console.log('Environment creation not implemented in process config');
   };
 

@@ -9,7 +9,7 @@ import ProcessStepsList from './ProcessStepsList';
 
 interface ProcessEditorProps {
   environment: Environment;
-  process: Process | null; // null for create mode
+  process: Process | null; 
   onBack: () => void;
   onProcessCreated: (process: Process) => void;
 }
@@ -45,7 +45,6 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [currentProcess, setCurrentProcess] = useState<Process | null>(process);
 
-  // Load zones and steps
   useEffect(() => {
     loadZones();
     if (currentProcess) {
@@ -87,10 +86,8 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
       let savedProcess: Process;
       
       if (currentProcess) {
-        // Update existing process
         savedProcess = await apiService.updateProcess(currentProcess.Id, processData);
       } else {
-        // Create new process
         savedProcess = await apiService.createProcess({
           ...processData,
           EnvironmentId: environment.Id,
@@ -101,7 +98,6 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
         onProcessCreated(savedProcess);
       }
 
-      // Save steps if any
       if (steps.length > 0) {
         await saveSteps(savedProcess);
       }
@@ -124,7 +120,7 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
       }));
 
       await apiService.saveProcessSteps(processToSave.Id, stepData);
-      await loadSteps(); // Reload to get updated step data
+      await loadSteps();
     } catch (err) {
       console.error('Failed to save steps:', err);
       setError('Failed to save process steps');
@@ -133,7 +129,7 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
 
   const addStep = (stepData: StepFormData) => {
     const newStep: ProcessStep = {
-      Id: Date.now(), // Temporary ID
+      Id: Date.now(),
       ProcessId: currentProcess?.Id || 0,
       StepNumber: steps.length + 1,
       StepName: stepData.StepName,
@@ -143,7 +139,6 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
       CreatedAt: new Date().toISOString(),
       CreatedBy: 'admin',
       IsActive: true,
-      // Add zone info for display
       ZoneName: zones.find(z => z.Id === stepData.TargetZoneId)?.ZoneName || '',
       Color: zones.find(z => z.Id === stepData.TargetZoneId)?.Color || '#000000'
     };
@@ -240,15 +235,14 @@ const ProcessEditor: React.FC<ProcessEditorProps> = ({
             alt={`Environment: ${environment.Name}`}
             onImageLoad={(dimensions) => console.log('Image loaded:', dimensions)}
           >
-            {/* Zone overlays */}
             <div className="position-absolute top-0 start-0">
               {zones.map(zone => (
                 <ZoneBox
                   key={zone.Id}
                   zone={zone}
                   isSelected={false}
-                  onSelect={() => {}} // Read-only display
-                  onUpdate={() => {}} // Read-only display
+                  onSelect={() => {}} 
+                  onUpdate={() => {}} 
                 />
               ))}
             </div>

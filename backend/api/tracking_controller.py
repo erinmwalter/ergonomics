@@ -7,7 +7,15 @@ import time
 logger = logging.getLogger(__name__)
 tracking_bp = Blueprint('tracking', __name__, url_prefix='/api/tracking')
 
-# Try to load YOLO, but don't crash if it's not available
+active_sessions = None
+
+def get_active_sessions():
+    global active_sessions
+    if active_sessions is None:
+        from api.analysis_controller import active_sessions as sessions
+        active_sessions = sessions
+    return active_sessions
+
 model = None
 YOLO_AVAILABLE = False
 
@@ -44,7 +52,6 @@ LEFT_WRIST_IDX = 9
 RIGHT_WRIST_IDX = 10
 
 def draw_pose(img, keypoints, conf_threshold=0.5):
-    """Draw stick figure on detected person"""
     for kp in keypoints:
         # Draw keypoints
         for i, (x, y, conf) in enumerate(kp):
@@ -65,7 +72,6 @@ def draw_pose(img, keypoints, conf_threshold=0.5):
     return img
 
 def draw_hand_boxes(img, keypoints, box_size=50, conf_threshold=0.5):
-    """Draw boxes around detected wrists (hands)"""
     for kp in keypoints:
         # Left wrist
         if LEFT_WRIST_IDX < len(kp):
@@ -94,7 +100,6 @@ def draw_hand_boxes(img, keypoints, box_size=50, conf_threshold=0.5):
     return img
 
 def check_hand_in_zone(keypoints, zone, conf_threshold=0.5):
-    """Check if either hand is within a zone"""
     for kp in keypoints:
         # Check left wrist
         if LEFT_WRIST_IDX < len(kp):
@@ -115,7 +120,6 @@ def check_hand_in_zone(keypoints, zone, conf_threshold=0.5):
     return False, None
 
 def draw_zones(img, zones):
-    """Draw zones on the image"""
     for zone in zones:
         x, y, w, h = zone['x'], zone['y'], zone['width'], zone['height']
         # Draw zone rectangle
@@ -127,16 +131,74 @@ def draw_zones(img, zones):
     
     return img
 
+def check_step_advancement(session_id, zone_id):
+    try:
+        sessions = get_active_sessions()
+        
+        if session_id not in sessions:
+            logger.warning(f"Session {session_id} not found in active sessions")
+            return False
+        
+        session = sessions[session_id]
+        service = session['service']
+        
+        if not service.is_tracking:
+            return False
+        
+        # Get current step info
+        current_step_idx = service.session_data.get('current_step', 0)
+        steps = service.process_steps
+        
+        if current_step_idx >= len(steps):
+            logger.info("Process already complete")
+            return False
+        
+        current_step = steps[current_step_idx]
+        target_zone_id = current_step['TargetZoneId']
+        
+        # Check if the detected zone matches the target zone for current step
+        if zone_id == target_zone_id:
+            logger.info(f"✓ CORRECT ZONE {zone_id} for step {current_step_idx + 1}: {current_step['StepName']}")
+            
+            # Record step completion
+            current_time = time.time()
+            step_time = current_time - (service.session_data['step_events'][-1]['time'] if service.session_data['step_events'] else service.session_data['start_time'])
+            
+            step_event = {
+                'step_number': current_step_idx + 1,
+                'step_name': current_step['StepName'],
+                'zone_hit': current_step.get('ZoneName', 'Unknown'),
+                'time': current_time,
+                'duration': step_time,
+                'target_duration': current_step['Duration']
+            }
+            
+            service.session_data['step_events'].append(step_event)
+            service.session_data['current_step'] = current_step_idx + 1
+            
+            logger.info(f"✓✓✓ STEP {current_step_idx + 1} COMPLETED! Moving to step {current_step_idx + 2}")
+            
+            # Check if process is complete
+            if service.session_data['current_step'] >= len(steps):
+                logger.info(f"🎉 PROCESS COMPLETE for session {session_id}")
+                session['status'] = 'completed'
+            
+            return True
+        else:
+            logger.info(f"✗ Wrong zone {zone_id} entered (expected {target_zone_id})")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error checking step advancement: {e}")
+        return False
+
 def generate_frames(zones=None, session_id=None):
-    """Generate video frames with YOLO pose detection"""
     if not YOLO_AVAILABLE:
         logger.error("YOLO not available - cannot generate frames")
         return
     
-    # Try DirectShow backend (CAP_DSHOW) for Windows
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     
-    # Set resolution to 640x480
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     
@@ -144,9 +206,10 @@ def generate_frames(zones=None, session_id=None):
         logger.error("Failed to open webcam")
         return
     
-    # Track which zones hands are currently in
     current_zone_detections = {}
     zone_entry_times = {}
+    
+    logger.info(f"Starting frame generation with session_id: {session_id}")
     
     try:
         while True:
@@ -154,17 +217,14 @@ def generate_frames(zones=None, session_id=None):
             if not ret:
                 break
             
-            # Run YOLOv11 pose detection
             results = model(frame, verbose=False)
             
-            # Process keypoints
             keypoints_data = []
             for result in results:
                 if result.keypoints is not None:
                     keypoints = result.keypoints.xy.cpu().numpy()
                     confidences = result.keypoints.conf.cpu().numpy()
                     
-                    # Combine coordinates with confidences
                     for i in range(len(keypoints)):
                         person_kp = []
                         for j in range(len(keypoints[i])):
@@ -183,35 +243,33 @@ def generate_frames(zones=None, session_id=None):
             if zones:
                 frame = draw_zones(frame, zones)
                 
-                # Check hand interactions with zones and LOG them
+                # Check hand interactions with zones
                 for kp in keypoints_data:
                     for zone in zones:
                         in_zone, hand = check_hand_in_zone([kp], zone)
                         zone_id = zone['id']
                         
                         if in_zone:
-                            # Highlight zone when hand is detected
                             x, y, w, h = zone['x'], zone['y'], zone['width'], zone['height']
                             cv2.rectangle(frame, (int(x), int(y)), (int(x + w), int(y + h)), 
                                         (0, 0, 255), 3)
                             
-                            # Track zone entry
                             if zone_id not in current_zone_detections:
                                 current_zone_detections[zone_id] = True
                                 zone_entry_times[zone_id] = time.time()
                                 logger.info(f"HAND ENTERED ZONE: {zone['name']} (ID: {zone_id})")
                                 
-                                # TODO: Send this detection to the analysis session
-                                # This is where you'd call an endpoint or update session state
+                                if session_id:
+                                    step_advanced = check_step_advancement(session_id, zone_id)
+                                    if step_advanced:
+                                        logger.info(f"Step advanced for session {session_id}")
                         else:
-                            # Hand left zone
                             if zone_id in current_zone_detections:
                                 duration = time.time() - zone_entry_times[zone_id]
                                 logger.info(f"HAND LEFT ZONE: {zone['name']} (ID: {zone_id}) - Duration: {duration:.2f}s")
                                 del current_zone_detections[zone_id]
                                 del zone_entry_times[zone_id]
             
-            # Encode frame
             ret, buffer = cv2.imencode('.jpg', frame)
             frame_bytes = buffer.tobytes()
             
@@ -224,12 +282,11 @@ def generate_frames(zones=None, session_id=None):
 
 @tracking_bp.route('/stream')
 def video_stream():
-    """Stream video with YOLO pose detection"""
-    # Get zones from query params if provided
     zones = request.args.get('zones')
+    session_id = request.args.get('sessionId')
     zones_list = None
     
-    logger.info(f"Stream request received. Zones param: {zones}")
+    logger.info(f"Stream request received. Zones param: {zones}, Session ID: {session_id}")
     
     if zones:
         import json
@@ -239,7 +296,7 @@ def video_stream():
         except Exception as e:
             logger.error(f"Failed to parse zones: {e}")
     
-    response = Response(generate_frames(zones_list),
+    response = Response(generate_frames(zones_list, session_id),
                        mimetype='multipart/x-mixed-replace; boundary=frame')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
@@ -249,17 +306,14 @@ def video_stream():
 
 @tracking_bp.route('/zone-detection', methods=['POST'])
 def report_zone_detection():
-    """Receive zone detection events from the tracking stream"""
     try:
         data = request.get_json()
         zone_id = data.get('zoneId')
         zone_name = data.get('zoneName')
-        event_type = data.get('eventType')  # 'enter' or 'exit'
+        event_type = data.get('eventType')
         duration = data.get('duration')
         
         logger.info(f"Zone detection: {event_type} zone {zone_name} (ID: {zone_id})")
-        
-        # TODO: Forward this to the analysis session to check if step should advance
         
         return jsonify({"status": "received"}), 200
         
@@ -269,7 +323,6 @@ def report_zone_detection():
 
 @tracking_bp.route('/status')
 def tracking_status():
-    """Check if tracking is available"""
     cap = cv2.VideoCapture(0)
     available = cap.isOpened()
     cap.release()

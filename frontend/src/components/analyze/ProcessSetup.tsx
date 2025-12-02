@@ -73,7 +73,6 @@ const ProcessSetup: React.FC<ProcessSetupProps> = ({ onSetupComplete }) => {
           <EnvironmentSelector
             onEnvironmentSelect={handleEnvironmentSelect}
             onCreateNew={() => {
-              // For analysis, we don't create new environments
               alert('Please use the Configuration page to create new environments.');
             }}
           />

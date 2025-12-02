@@ -156,9 +156,8 @@ def update_zones_for_environment(env_id):
         
         db.execute_update("UPDATE public.\"Zones\" SET \"IsActive\" = false WHERE \"EnvironmentId\" = %s", (env_id,))
         
-        # Create new zones
         for zone in zones:
-            if zone.get('Id', 0) > 0:  # Only save zones that don't have temp IDs
+            if zone.get('Id', 0) > 0:
                 db.create_zone(
                     environment_id=env_id,
                     zone_name=zone['ZoneName'],

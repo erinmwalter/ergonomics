@@ -64,10 +64,8 @@ const EnvironmentCreator: React.FC<EnvironmentCreatorProps> = ({
     
     console.log('Got webcam stream:', stream);
     
-    // First set the step to capture, then set the stream
     setCurrentStep('capture');
     
-    // Wait a bit for the video element to render
     setTimeout(() => {
       if (videoRef.current) {
         console.log('Setting stream on video element');
@@ -75,7 +73,7 @@ const EnvironmentCreator: React.FC<EnvironmentCreatorProps> = ({
         videoRef.current.play().catch(err => {
           console.error('Video play failed:', err);
         });
-        setIsCapturing(false); // Reset the capturing state
+        setIsCapturing(false);
       }
     }, 100);
     
@@ -183,14 +181,12 @@ const EnvironmentCreator: React.FC<EnvironmentCreatorProps> = ({
   setError(null);
 
   try {
-    // Step 1: Create the environment
     const environment = await apiService.createEnvironment(
       environmentName.trim(),
-      imageSrc, // This is already "images/filename.jpg"
+      imageSrc,
       'admin'
     );
 
-    // Step 2: Save zones if any exist
     if (zones.length > 0) {
       const zonesWithEnvironmentId = zones.map(zone => ({
         ...zone,
@@ -271,7 +267,6 @@ const EnvironmentCreator: React.FC<EnvironmentCreatorProps> = ({
     );
   }
 
-  // Step 2: Webcam Capture
   if (currentStep === 'capture') {
     return (
       <Card>
@@ -314,7 +309,6 @@ const EnvironmentCreator: React.FC<EnvironmentCreatorProps> = ({
     );
   }
 
-  // Step 3: Configure Zones
   return (
     <div>
       <Card className="mb-3">
