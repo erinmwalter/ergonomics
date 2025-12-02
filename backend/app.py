@@ -4,6 +4,7 @@ import logging
 from api.config_controller import config_bp
 from api.process_controller import process_bp
 from api.analysis_controller import analysis_bp
+from api.tracking_controller import tracking_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +21,7 @@ def create_app():
     app.register_blueprint(process_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(analysis_bp)
+    app.register_blueprint(tracking_bp)
     
     @app.route('/health')
     def health_check():

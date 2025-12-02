@@ -70,7 +70,6 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
         style={{
           width: '100%',
           height: 'auto',
-          maxWidth: '640px',
           backgroundColor: '#000'
         }}
       />
@@ -88,10 +87,10 @@ const YOLOTracker: React.FC<YOLOTrackerProps> = ({
       {/* Status indicators */}
       <div className="position-absolute top-0 start-0 p-2">
         {stream && (
-          <span className="badge bg-success">📹 Camera Active</span>
+          <span className="badge bg-success">Camera Active</span>
         )}
         {isTracking && (
-          <span className="badge bg-primary ms-2">🎯 Tracking Mode</span>
+          <span className="badge bg-primary ms-2">Tracking Mode</span>
         )}
       </div>
     </div>

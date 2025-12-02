@@ -9,13 +9,10 @@ from database import DatabaseService
 
 class ProcessAnalysisService:
     def __init__(self):
-        # Load YOLOv11 pose model
         self.model = YOLO('yolo11n-pose.pt')
         
-        # Initialize database connection
         self.db = DatabaseService(database="postgres")
         
-        # Tracking state
         self.is_tracking = False
         self.current_process = None
         self.current_zones = []
@@ -28,22 +25,18 @@ class ProcessAnalysisService:
             'completion_times': []
         }
         
-        # Hand detection settings
         self.conf_threshold = 0.5
-        self.hand_offset_pixels = 30  # Offset from wrist to actual hand position
+        self.hand_offset_pixels = 30
         
     def load_process(self, environment_id: int, process_id: int):
         """Load process and zones for tracking"""
         try:
-            # Load process details
             self.current_process = self.db.get_process_by_id(process_id)
             if not self.current_process:
                 raise ValueError(f"Process {process_id} not found")
             
-            # Load zones for the environment
             self.current_zones = self.db.get_zones_for_environment(environment_id)
             
-            # Load process steps
             self.process_steps = self.db.get_process_steps(process_id)
             
             print(f"Loaded process: {self.current_process['ProcessName']}")
@@ -83,7 +76,6 @@ class ProcessAnalysisService:
         end_time = time.time()
         total_time = end_time - self.session_data['start_time']
         
-        # Calculate adherence metrics
         results = self.calculate_adherence_metrics(total_time)
         
         # TODO: Save session to database

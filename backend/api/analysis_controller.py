@@ -13,6 +13,9 @@ analysis_bp = Blueprint('analysis', __name__, url_prefix='/api')
 # Initialize database
 db = DatabaseService(database="postgres")
 
+# Global dict to track zone detections per session
+session_zone_tracking = {}
+
 # Store active analysis sessions (in production, use Redis or database)
 active_sessions = {}
 
@@ -58,6 +61,86 @@ def start_analysis():
     except Exception as e:
         logger.error(f"Error starting analysis session: {e}")
         return jsonify({"error": "Failed to start analysis session"}), 500
+
+@analysis_bp.route('/analysis/zone-detected/<session_id>', methods=['POST'])
+def handle_zone_detection(session_id):
+    """Handle zone detection from YOLO tracking and advance steps"""
+    try:
+        if session_id not in active_sessions:
+            logger.warning(f"Zone detection for unknown session: {session_id}")
+            return jsonify({"error": "Session not found"}), 404
+        
+        data = request.get_json()
+        zone_id = data.get('zoneId')
+        event_type = data.get('eventType')  # 'enter' or 'exit'
+        timestamp = data.get('timestamp')
+        
+        session = active_sessions[session_id]
+        service = session['service']
+        
+        # Initialize zone tracking for this session if needed
+        if session_id not in session_zone_tracking:
+            session_zone_tracking[session_id] = {
+                'current_zone': None,
+                'entry_time': None
+            }
+        
+        zone_track = session_zone_tracking[session_id]
+        
+        if event_type == 'enter':
+            # Hand entered zone
+            zone_track['current_zone'] = zone_id
+            zone_track['entry_time'] = timestamp
+            
+            # Check if this zone matches the current step's target zone
+            current_step = service.session_data.get('current_step', 0)
+            steps = service.session_data.get('steps', [])
+            
+            if current_step < len(steps):
+                target_zone_id = steps[current_step].get('TargetZoneId')
+                
+                if zone_id == target_zone_id:
+                    logger.info(f"✓ Correct zone {zone_id} entered for step {current_step + 1}")
+                    
+                    # ADVANCE STEP IMMEDIATELY ON ENTRY
+                    step_event = {
+                        'step': current_step + 1,
+                        'zoneName': steps[current_step].get('ZoneName'),
+                        'targetDuration': steps[current_step].get('Duration', 0),
+                        'actualDuration': 0,  # Don't track duration for now
+                        'timestamp': timestamp,
+                        'adherence': 100
+                    }
+                    
+                    # Add to step events
+                    if 'step_events' not in service.session_data:
+                        service.session_data['step_events'] = []
+                    service.session_data['step_events'].append(step_event)
+                    
+                    # Advance to next step
+                    service.session_data['current_step'] = current_step + 1
+                    
+                    logger.info(f"✓ STEP {current_step + 1} COMPLETED!")
+                    
+                    # Check if process is complete
+                    if service.session_data['current_step'] >= len(steps):
+                        logger.info(f"🎉 PROCESS COMPLETE for session {session_id}")
+                        session['status'] = 'completed'
+                else:
+                    logger.info(f"✗ Wrong zone {zone_id} entered (expected {target_zone_id})")
+        
+        elif event_type == 'exit':
+            # Just reset tracking, no step advancement
+            if zone_track['current_zone'] == zone_id:
+                logger.info(f"Hand left zone {zone_id}")
+                zone_track['current_zone'] = None
+                zone_track['entry_time'] = None
+        
+        return jsonify({"status": "processed"}), 200
+        
+    except Exception as e:
+        logger.error(f"Error handling zone detection: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route('/analysis/start-tracking/<session_id>', methods=['POST'])
 def start_tracking(session_id):
@@ -191,10 +274,6 @@ def save_results(session_id):
         session = active_sessions[session_id]
         results = data.get('results')
         
-        # TODO: Save results to database
-        # This would create a new table for analysis sessions and results
-        # For now, just log and return success
-        
         logger.info(f"Results saved for session {session_id}: {results}")
         
         return jsonify({"message": "Results saved successfully"}), 200
@@ -209,9 +288,6 @@ def get_analysis_history():
     try:
         environment_id = request.args.get('environmentId')
         process_id = request.args.get('processId')
-        
-        # TODO: Implement database query for historical sessions
-        # For now, return empty array
         
         return jsonify([]), 200
         
@@ -248,11 +324,9 @@ def cleanup_session(session_id):
             session = active_sessions[session_id]
             service = session['service']
             
-            # Stop tracking if active
             if service.is_tracking:
                 service.stop_tracking()
             
-            # Remove session
             del active_sessions[session_id]
             
             logger.info(f"Session cleaned up: {session_id}")
@@ -263,7 +337,6 @@ def cleanup_session(session_id):
         logger.error(f"Error cleaning up session {session_id}: {e}")
         return jsonify({"error": "Failed to cleanup session"}), 500
 
-# Health check for analysis service
 @analysis_bp.route('/analysis/health', methods=['GET'])
 def analysis_health():
     """Health check for analysis endpoints"""

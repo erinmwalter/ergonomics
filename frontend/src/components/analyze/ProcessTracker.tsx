@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardBody, CardTitle, Button, Alert, Row, Col } from 'reactstrap';
+import React, { useState, useEffect } from 'react';
+import { Card, CardBody, CardTitle, Button, Alert, Row, Col, Badge } from 'reactstrap';
 import type { Environment, Process, Zone, ProcessStep } from '../../models';
 import { apiService } from '../../services/ApiService';
+import trackingService from '../../services/TrackingService';
 import TrackingStatus from './TrackingStatus';
 
 interface ProcessTrackerProps {
@@ -45,11 +46,28 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trackingAvailable, setTrackingAvailable] = useState<boolean>(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [streamUrl, setStreamUrl] = useState<string>('');
 
   // Load environment zones and process steps
   useEffect(() => {
     loadTrackingData();
+    checkTrackingStatus();
   }, [environment.Id, process.Id]);
+
+  const checkTrackingStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      const status = await trackingService.checkTrackingStatus();
+      setTrackingAvailable(status.available && status.model_loaded);
+      setCheckingStatus(false);
+    } catch (err) {
+      console.error('Error checking tracking status:', err);
+      setTrackingAvailable(false);
+      setCheckingStatus(false);
+    }
+  };
 
   const loadTrackingData = async () => {
     setLoading(true);
@@ -84,15 +102,29 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
       return;
     }
 
+    if (!trackingAvailable) {
+      setError('Tracking not available. Check webcam and YOLO model.');
+      return;
+    }
+
     try {
-      // Start analysis session with the Python YOLO service
+      // CRITICAL: Stop any active webcam streams from the frontend
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      console.log('Stopped any active webcam streams');
+
+      // Small delay to ensure webcam is released
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Start analysis session
       const response = await apiService.startAnalysisSession(environment.Id, process.Id);
       setSessionId(response.sessionId);
 
-      // Start the actual Python YOLO tracking
-      await fetch(`/api/analysis/start-tracking/${response.sessionId}`, {
-        method: 'POST'
-      });
+      // Get stream URL with zones (conversion happens inside getStreamUrl)
+      console.log('Zones being sent to tracking:', zones);
+      const url = trackingService.getStreamUrl(zones, response.sessionId);
+      console.log('Stream URL:', url);
+      setStreamUrl(url);
 
       setTracking({
         isActive: true,
@@ -103,25 +135,25 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
 
       onTrackingStart();
       
-      // Start polling for automatic step detection from YOLO
+      // Start polling for step detection
       startStepDetectionPolling(response.sessionId);
       
-      console.log('Real YOLO analysis session started:', response.sessionId);
-      console.log('Python service will automatically detect hand-to-zone contact');
+      console.log('YOLO tracking started with session:', response.sessionId);
+      console.log('Stream URL:', url);
       
     } catch (err) {
-      console.error('Failed to start YOLO tracking session:', err);
-      setError('Failed to start YOLO tracking session');
+      console.error('Failed to start tracking:', err);
+      setError('Failed to start tracking session');
     }
   };
 
-  // Poll the backend for automatic step completion detected by YOLO
+  // Poll for step detection from backend
   const startStepDetectionPolling = (sessionId: string) => {
     const pollInterval = setInterval(async () => {
       try {
         const status = await apiService.getAnalysisStatus(sessionId);
         
-        // Check if YOLO detected a new step completion
+        // Check if a new step was detected
         if (status.stepEvents && status.stepEvents.length > tracking.stepEvents.length) {
           const newStepEvent = status.stepEvents[status.stepEvents.length - 1];
           
@@ -131,9 +163,9 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
             stepEvents: status.stepEvents
           }));
           
-          console.log('YOLO automatically detected step completion:', newStepEvent);
+          console.log('Step detected:', newStepEvent);
           
-          // Check if process is complete
+          // Check if complete
           if (status.currentStep >= processSteps.length) {
             clearInterval(pollInterval);
           }
@@ -142,7 +174,7 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
         console.error('Error polling step detection:', err);
         clearInterval(pollInterval);
       }
-    }, 500); // Poll every 500ms for real-time detection
+    }, 500);
     
     return pollInterval;
   };
@@ -151,7 +183,7 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     if (!tracking.isActive || !sessionId) return;
 
     try {
-      // Stop analysis session and get results
+      // Stop analysis session
       const response = await apiService.stopAnalysisSession(sessionId);
       const results = response.results || calculateResults(0);
       
@@ -162,17 +194,26 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
         stepEvents: []
       });
 
+      setStreamUrl('');
+
+      // CRITICAL: Release the webcam by stopping backend stream
+      // Wait a moment for the stream to close
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Save results
       await apiService.saveAnalysisResults(sessionId, results);
 
       onTrackingComplete(results);
       
     } catch (err) {
-      console.error('Failed to stop analysis session:', err);
-      // Fallback to local calculation
+      console.error('Failed to stop tracking:', err);
+      // Fallback
       const endTime = Date.now();
       const totalTime = tracking.startTime ? (endTime - tracking.startTime) / 1000 : 0;
       const results = calculateResults(totalTime);
+      
+      setStreamUrl('');
+      
       onTrackingComplete(results);
     }
   };
@@ -181,7 +222,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     const completedSteps = tracking.stepEvents.length;
     const totalSteps = processSteps.length;
     
-    // Basic adherence calculation
     const completionRate = (completedSteps / totalSteps) * 100;
     const targetTime = processSteps.reduce((sum, step) => sum + step.Duration, 0);
     const timeAdherence = Math.max(0, 100 - Math.abs(totalTime - targetTime) / targetTime * 100);
@@ -200,8 +240,36 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     };
   };
 
-  const canStartTracking = !loading && zones.length > 0 && processSteps.length > 0;
+  const canStartTracking = !loading && zones.length > 0 && processSteps.length > 0 && trackingAvailable && !checkingStatus;
   const isTrackingComplete = tracking.currentStep >= processSteps.length;
+
+  // Show loading screen while checking YOLO availability
+  if (checkingStatus) {
+    return (
+      <div>
+        <Card className="mb-4">
+          <CardBody>
+            <Row className="align-items-center mb-3">
+              <Col>
+                <CardTitle tag="h4">Step 4: Process Tracking</CardTitle>
+                <p className="text-muted mb-0">
+                  Track hand movements for process: <strong>{process.ProcessName}</strong>
+                </p>
+              </Col>
+            </Row>
+          </CardBody>
+        </Card>
+
+        <div className="text-center p-5">
+          <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }} role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <h5>Initializing YOLO Tracking System...</h5>
+          <p className="text-muted">Please wait while we prepare the hand tracking system</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -244,100 +312,85 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
             </Alert>
           )}
 
+          {!checkingStatus && !trackingAvailable && (
+            <Alert color="warning">
+              YOLO model or webcam not available. Please check your setup.
+            </Alert>
+          )}
+
           {loading && (
             <div className="text-center p-4">
               <div className="spinner-border" role="status">
-                <span className="sr-only">Loading process data...</span>
+                <span className="visually-hidden">Loading...</span>
               </div>
             </div>
           )}
         </CardBody>
       </Card>
 
-      {/* Webcam Feed - Always render so videoRef is available */}
       <Row>
         <Col lg={8}>
+          {/* YOLO Video Stream */}
           <Card className="mb-4">
             <CardBody>
-              <h6>Live YOLO Tracking Feed</h6>
+              <h6 className="mb-3">
+                Live YOLO Tracking Feed
+                {tracking.isActive && (
+                  <Badge color="success" className="ms-2">ACTIVE</Badge>
+                )}
+              </h6>
               
-              <div className="position-relative">
-                {/* Working video feed */}
-                <video
-                  autoPlay
-                  muted
-                  style={{
-                    width: '100%',
-                    height: '360px',
-                    objectFit: 'cover',
-                    backgroundColor: '#000'
-                  }}
-                  ref={(video) => {
-                    if (video && !video.srcObject) {
-                      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-                        .then(stream => {
-                          video.srcObject = stream;
-                          console.log('ProcessTracker: Video working');
-                        })
-                        .catch(err => console.error('Video error:', err));
-                    }
-                  }}
-                />
-                
-                {/* Zone overlays on top of video */}
-                {zones.map(zone => {
-                  const isTargetZone = processSteps[tracking.currentStep]?.TargetZoneId === zone.Id;
-                  return (
-                    <div
-                      key={zone.Id}
-                      className={`position-absolute ${isTargetZone ? 'border-warning border-4' : 'border-light border-2'}`}
-                      style={{
-                        left: `${(zone.Xstart / 640) * 100}%`,
-                        top: `${(zone.Ystart / 480) * 100}%`,
-                        width: `${((zone.Xend - zone.Xstart) / 640) * 100}%`,
-                        height: `${((zone.Yend - zone.Ystart) / 480) * 100}%`,
-                        backgroundColor: isTargetZone ? 'rgba(255, 255, 0, 0.3)' : 'rgba(0, 123, 255, 0.2)',
-                        border: '3px solid',
-                        pointerEvents: 'none' // Display only - YOLO handles detection
-                      }}
-                    >
-                      <div className="position-absolute top-0 start-0 bg-dark text-white px-2 py-1" style={{ fontSize: '12px' }}>
-                        {zone.ZoneName} {isTargetZone && 'TARGET'}
-                      </div>
-                    </div>
-                  );
-                })}
-                
-                {/* Status indicators */}
-                <div className="position-absolute top-0 end-0 p-2">
-                  <span className="badge bg-success">Camera</span>
-                  {tracking.isActive && (
-                    <span className="badge bg-primary ms-2">Tracking</span>
-                  )}
+              {streamUrl && tracking.isActive ? (
+                <div className="position-relative">
+                  <img
+                    key={streamUrl}
+                    src={streamUrl}
+                    alt="YOLO tracking feed"
+                    style={{
+                      width: '640px',
+                      height: '480px',
+                      border: '2px solid #333',
+                      borderRadius: '4px',
+                      backgroundColor: '#000'
+                    }}
+                    onError={(e) => {
+                      console.error('Image failed to load');
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      🟢 Green: Keypoints | 🔵 Cyan/Yellow: Hand boxes | 
+                      🟢 Green boxes: Zones | 🔴 Red: Active zone
+                    </small>
+                  </div>
                 </div>
-              </div>
-              
-              {/* Zone Info */}
-              <div className="mt-2 p-2 bg-light rounded">
-                <small>
-                  <strong>Active Zones:</strong> {zones.map(z => z.ZoneName).join(', ')}
-                </small>
-              </div>
+              ) : (
+                <div 
+                  className="d-flex align-items-center justify-content-center bg-dark text-white"
+                  style={{ height: '360px', borderRadius: '4px' }}
+                >
+                  <div className="text-center">
+                    <p>Click "Start Tracking" to begin YOLO pose detection</p>
+                    {!trackingAvailable && (
+                      <small className="text-warning">
+                        ⚠ Tracking not available
+                      </small>
+                    )}
+                  </div>
+                </div>
+              )}
 
-              {/* Real YOLO Tracking Status */}
-              {tracking.isActive && !isTrackingComplete && (
+              {tracking.isActive && processSteps[tracking.currentStep] && (
                 <div className="mt-3">
                   <div className="alert alert-info">
-                    <h6><strong>YOLO Auto-Detection Active</strong></h6>
-                    <p className="mb-2">
-                      <strong>Current Target:</strong> {processSteps[tracking.currentStep]?.ZoneName}<br/>
-                      <strong>Action Required:</strong> {processSteps[tracking.currentStep]?.StepName}<br/>
-                      <strong>Time Target:</strong> {processSteps[tracking.currentStep]?.Duration}s
-                    </p>
-                    <p className="mb-0">
-                      <strong>Instructions:</strong> Move your hands to the highlighted target zone. 
+                    <strong>Current Step: </strong>
+                    {processSteps[tracking.currentStep].StepName}
+                    <br />
+                    <small>
+                      Move your hand to the <strong>{processSteps[tracking.currentStep].ZoneName}</strong> zone.
                       The system will automatically detect when you complete the step.
-                    </p>
+                    </small>
                   </div>
                 </div>
               )}
@@ -346,14 +399,15 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
                 <div className="mt-3">
                   <div className="alert alert-success">
                     <h5>Process Complete!</h5>
-                    <p>All {processSteps.length} steps automatically detected. Click "Stop Tracking" to see results.</p>
+                    <p>All {processSteps.length} steps detected. Click "Stop Tracking" to see results.</p>
                   </div>
                 </div>
               )}
             </CardBody>
           </Card>
 
-          {!loading && (
+          {/* Zone Display */}
+          {!loading && zones.length > 0 && (
             <Card>
               <CardBody>
                 <h6>Environment Zones</h6>
@@ -369,7 +423,8 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
                             width: '20px',
                             height: '20px', 
                             backgroundColor: zone.Color,
-                            marginRight: '10px'
+                            marginRight: '10px',
+                            borderRadius: '2px'
                           }}
                         />
                         <span>{zone.ZoneName}</span>
@@ -382,6 +437,7 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
           )}
         </Col>
 
+        {/* Tracking Status Sidebar */}
         <Col lg={4}>
           {!loading && (
             <TrackingStatus
