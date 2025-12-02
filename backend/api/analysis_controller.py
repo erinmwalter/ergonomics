@@ -4,19 +4,18 @@ import uuid
 from datetime import datetime
 from database import DatabaseService
 from process_analysis_service import ProcessAnalysisService
+import numpy as np
+import cv2
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
 analysis_bp = Blueprint('analysis', __name__, url_prefix='/api')
 
-# Initialize database
 db = DatabaseService(database="postgres")
 
-# Global dict to track zone detections per session
 session_zone_tracking = {}
 
-# Store active analysis sessions (in production, use Redis or database)
 active_sessions = {}
 
 @analysis_bp.route('/analysis/start', methods=['POST'])
@@ -31,17 +30,13 @@ def start_analysis():
         environment_id = data['environmentId']
         process_id = data['processId']
         
-        # Create new analysis service instance
         service = ProcessAnalysisService()
         
-        # Load the process data
         if not service.load_process(environment_id, process_id):
             return jsonify({"error": "Failed to load process data"}), 400
         
-        # Generate session ID
         session_id = str(uuid.uuid4())
         
-        # Store session
         active_sessions[session_id] = {
             'service': service,
             'environment_id': environment_id,
@@ -72,13 +67,12 @@ def handle_zone_detection(session_id):
         
         data = request.get_json()
         zone_id = data.get('zoneId')
-        event_type = data.get('eventType')  # 'enter' or 'exit'
+        event_type = data.get('eventType')
         timestamp = data.get('timestamp')
         
         session = active_sessions[session_id]
         service = session['service']
         
-        # Initialize zone tracking for this session if needed
         if session_id not in session_zone_tracking:
             session_zone_tracking[session_id] = {
                 'current_zone': None,
@@ -88,11 +82,9 @@ def handle_zone_detection(session_id):
         zone_track = session_zone_tracking[session_id]
         
         if event_type == 'enter':
-            # Hand entered zone
             zone_track['current_zone'] = zone_id
             zone_track['entry_time'] = timestamp
             
-            # Check if this zone matches the current step's target zone
             current_step = service.session_data.get('current_step', 0)
             steps = service.session_data.get('steps', [])
             
@@ -102,27 +94,23 @@ def handle_zone_detection(session_id):
                 if zone_id == target_zone_id:
                     logger.info(f"✓ Correct zone {zone_id} entered for step {current_step + 1}")
                     
-                    # ADVANCE STEP IMMEDIATELY ON ENTRY
                     step_event = {
                         'step': current_step + 1,
                         'zoneName': steps[current_step].get('ZoneName'),
                         'targetDuration': steps[current_step].get('Duration', 0),
-                        'actualDuration': 0,  # Don't track duration for now
+                        'actualDuration': 0, 
                         'timestamp': timestamp,
                         'adherence': 100
                     }
                     
-                    # Add to step events
                     if 'step_events' not in service.session_data:
                         service.session_data['step_events'] = []
                     service.session_data['step_events'].append(step_event)
                     
-                    # Advance to next step
                     service.session_data['current_step'] = current_step + 1
                     
                     logger.info(f"✓ STEP {current_step + 1} COMPLETED!")
                     
-                    # Check if process is complete
                     if service.session_data['current_step'] >= len(steps):
                         logger.info(f"🎉 PROCESS COMPLETE for session {session_id}")
                         session['status'] = 'completed'
@@ -130,7 +118,6 @@ def handle_zone_detection(session_id):
                     logger.info(f"✗ Wrong zone {zone_id} entered (expected {target_zone_id})")
         
         elif event_type == 'exit':
-            # Just reset tracking, no step advancement
             if zone_track['current_zone'] == zone_id:
                 logger.info(f"Hand left zone {zone_id}")
                 zone_track['current_zone'] = None
@@ -152,7 +139,6 @@ def start_tracking(session_id):
         session = active_sessions[session_id]
         service = session['service']
         
-        # Start tracking
         service.start_tracking()
         session['status'] = 'tracking'
         
@@ -177,7 +163,6 @@ def stop_analysis(session_id):
         session = active_sessions[session_id]
         service = session['service']
         
-        # Stop tracking and get results
         results = service.stop_tracking()
         session['status'] = 'completed'
         session['results'] = results
@@ -203,7 +188,6 @@ def get_analysis_status(session_id):
         session = active_sessions[session_id]
         service = session['service']
         
-        # Get current tracking status
         status_data = {
             'sessionId': session_id,
             'status': session['status'],
@@ -213,7 +197,6 @@ def get_analysis_status(session_id):
             'elapsedTime': 0
         }
         
-        # Calculate elapsed time if tracking
         if service.is_tracking and service.session_data.get('start_time'):
             import time
             status_data['elapsedTime'] = time.time() - service.session_data['start_time']
@@ -234,23 +217,14 @@ def process_frame(session_id):
         session = active_sessions[session_id]
         service = session['service']
         
-        # Get frame data from request
         if request.content_type.startswith('image/'):
-            # Handle raw image data
-            import numpy as np
-            import cv2
-            from io import BytesIO
-            
-            # Decode image
             image_data = request.get_data()
             nparr = np.frombuffer(image_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if frame is not None:
-                # Process frame with YOLO
                 processed_frame = service.process_frame(frame)
-                
-                # Encode processed frame back to JPEG
+
                 _, buffer = cv2.imencode('.jpg', processed_frame)
                 response_data = buffer.tobytes()
                 

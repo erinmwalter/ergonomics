@@ -2,11 +2,9 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# Load YOLOv11 pose model
 model = YOLO('yolo11n-pose.pt')
 
 def get_hand_positions(keypoints, conf_threshold=0.5):
-    """Extract left and right hand positions from pose keypoints"""
     hands = {'left': None, 'right': None}
     
     for person_kp in keypoints:

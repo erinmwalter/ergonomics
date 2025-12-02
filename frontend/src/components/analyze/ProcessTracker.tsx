@@ -50,7 +50,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [streamUrl, setStreamUrl] = useState<string>('');
 
-  // Load environment zones and process steps
   useEffect(() => {
     loadTrackingData();
     checkTrackingStatus();
@@ -74,11 +73,9 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     setError(null);
 
     try {
-      // Load zones for environment
       const zonesData = await apiService.getZonesForEnvironment(environment.Id);
       setZones(zonesData);
 
-      // Load steps for process  
       const stepsData = await apiService.getProcessSteps(process.Id);
       setProcessSteps(stepsData);
 
@@ -108,19 +105,15 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     }
 
     try {
-      // CRITICAL: Stop any active webcam streams from the frontend
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop());
       console.log('Stopped any active webcam streams');
 
-      // Small delay to ensure webcam is released
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Start analysis session
       const response = await apiService.startAnalysisSession(environment.Id, process.Id);
       setSessionId(response.sessionId);
 
-      // Get stream URL with zones (conversion happens inside getStreamUrl)
       console.log('Zones being sent to tracking:', zones);
       const url = trackingService.getStreamUrl(zones, response.sessionId);
       console.log('Stream URL:', url);
@@ -135,7 +128,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
 
       onTrackingStart();
       
-      // Start polling for step detection
       startStepDetectionPolling(response.sessionId);
       
       console.log('YOLO tracking started with session:', response.sessionId);
@@ -147,13 +139,11 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     }
   };
 
-  // Poll for step detection from backend
   const startStepDetectionPolling = (sessionId: string) => {
     const pollInterval = setInterval(async () => {
       try {
         const status = await apiService.getAnalysisStatus(sessionId);
         
-        // Check if a new step was detected
         if (status.stepEvents && status.stepEvents.length > tracking.stepEvents.length) {
           const newStepEvent = status.stepEvents[status.stepEvents.length - 1];
           
@@ -165,7 +155,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
           
           console.log('Step detected:', newStepEvent);
           
-          // Check if complete
           if (status.currentStep >= processSteps.length) {
             clearInterval(pollInterval);
           }
@@ -183,7 +172,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
     if (!tracking.isActive || !sessionId) return;
 
     try {
-      // Stop analysis session
       const response = await apiService.stopAnalysisSession(sessionId);
       const results = response.results || calculateResults(0);
       
@@ -196,18 +184,14 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
 
       setStreamUrl('');
 
-      // CRITICAL: Release the webcam by stopping backend stream
-      // Wait a moment for the stream to close
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Save results
       await apiService.saveAnalysisResults(sessionId, results);
 
       onTrackingComplete(results);
       
     } catch (err) {
       console.error('Failed to stop tracking:', err);
-      // Fallback
       const endTime = Date.now();
       const totalTime = tracking.startTime ? (endTime - tracking.startTime) / 1000 : 0;
       const results = calculateResults(totalTime);
@@ -243,7 +227,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
   const canStartTracking = !loading && zones.length > 0 && processSteps.length > 0 && trackingAvailable && !checkingStatus;
   const isTrackingComplete = tracking.currentStep >= processSteps.length;
 
-  // Show loading screen while checking YOLO availability
   if (checkingStatus) {
     return (
       <div>
@@ -330,7 +313,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
 
       <Row>
         <Col lg={8}>
-          {/* YOLO Video Stream */}
           <Card className="mb-4">
             <CardBody>
               <h6 className="mb-3">
@@ -406,7 +388,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
             </CardBody>
           </Card>
 
-          {/* Zone Display */}
           {!loading && zones.length > 0 && (
             <Card>
               <CardBody>
@@ -437,7 +418,6 @@ const ProcessTracker: React.FC<ProcessTrackerProps> = ({
           )}
         </Col>
 
-        {/* Tracking Status Sidebar */}
         <Col lg={4}>
           {!loading && (
             <TrackingStatus

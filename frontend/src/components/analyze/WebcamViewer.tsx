@@ -19,7 +19,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
         console.log('Attempting to start webcam...');
 
         try {
-            // Check if mediaDevices is supported
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Camera access not supported in this browser');
             }
@@ -35,7 +34,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
 
             console.log('Camera stream obtained:', stream);
 
-            // Wait a bit for the video element to be available
             const maxRetries = 10;
             let retries = 0;
 
@@ -44,14 +42,12 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                     console.log('Video element found, setting stream');
                     videoRef.current.srcObject = stream;
 
-                    // Wait for video to load metadata
                     videoRef.current.onloadedmetadata = () => {
                         console.log('Video metadata loaded, webcam should be active');
                         setWebcamActive(true);
                         setLoading(false);
                     };
 
-                    // Handle video errors
                     videoRef.current.onerror = (e) => {
                         console.error('Video element error:', e);
                         setError('Failed to display video stream');
@@ -104,7 +100,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
         onWebcamReady();
     };
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             stopWebcam();
@@ -124,7 +119,7 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                         </Col>
                         <Col xs="auto">
                             <Button color="secondary" onClick={onBack} className="me-2">
-                                ← Back to Setup
+                                Back to Setup
                             </Button>
                         </Col>
                     </Row>
@@ -140,7 +135,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                             <Card className="bg-dark">
                                 <CardBody className="text-center p-0">
                                     <div style={{ height: '360px', position: 'relative', overflow: 'hidden' }}>
-                                        {/* Always render video element but control visibility */}
                                         <video
                                             ref={videoRef}
                                             autoPlay
@@ -148,12 +142,11 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                                             style={{
                                                 width: '100%',
                                                 height: '100%',
-                                                objectFit: 'cover', // This will make it fill the container
+                                                objectFit: 'cover',
                                                 display: webcamActive ? 'block' : 'none'
                                             }}
                                         />
 
-                                        {/* Show placeholder when webcam not active */}
                                         {!webcamActive && (
                                             <div
                                                 className="d-flex align-items-center justify-content-center position-absolute top-0 start-0 w-100 h-100"
@@ -170,31 +163,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                             </Card>
                         </Col>
 
-                        <Col lg={4}>
-                            <Card className="h-100">
-                                <CardBody>
-                                    <h6>Webcam Instructions</h6>
-
-                                    <ol className="small">
-                                        <li>Click <strong>"Start Webcam"</strong> below</li>
-                                        <li>Allow camera permissions if prompted</li>
-                                        <li>Position yourself in front of the camera</li>
-                                        <li>Ensure good lighting and clear view of your hands</li>
-                                        <li>Click <strong>"Continue to Tracking"</strong> when ready</li>
-                                    </ol>
-
-                                    <div className="mt-4">
-                                        <h6>Tips for Best Results:</h6>
-                                        <ul className="small text-muted">
-                                            <li>Stand/sit 3-6 feet from camera</li>
-                                            <li>Ensure hands are visible</li>
-                                            <li>Avoid cluttered background</li>
-                                            <li>Good lighting on your workspace</li>
-                                        </ul>
-                                    </div>
-                                </CardBody>
-                            </Card>
-                        </Col>
                     </Row>
 
                     <div className="mt-3 text-center">
@@ -217,12 +185,6 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                                         </>
                                     )}
                                 </Button>
-
-                                <div className="mt-2">
-                                    <small className="text-muted">
-                                        Having issues? Check browser console for errors.
-                                    </small>
-                                </div>
                             </div>
                         ) : (
                             <div>
@@ -250,7 +212,7 @@ const WebcamViewer: React.FC<WebcamViewerProps> = ({ onWebcamReady, onBack }) =>
                                         size="lg"
                                         onClick={handleProceed}
                                     >
-                                        Continue to Tracking →
+                                        Continue to Tracking
                                     </Button>
                                 </div>
                             </div>

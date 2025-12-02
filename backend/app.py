@@ -13,7 +13,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def create_app():
-    """Application factory pattern"""
     app = Flask(__name__)
     
     CORS(app, origins=["http://localhost:3000"])

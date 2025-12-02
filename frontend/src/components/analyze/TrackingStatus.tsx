@@ -26,14 +26,13 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
 }) => {
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  // Update elapsed time every second when tracking
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
     if (isTracking && startTime) {
       interval = setInterval(() => {
         setElapsedTime((Date.now() - startTime) / 1000);
-      }, 100); // Update every 100ms for smooth display
+      }, 100);
     } else {
       setElapsedTime(0);
     }
@@ -70,7 +69,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
 
   return (
     <div>
-      {/* Overall Status */}
       <Card className="mb-3">
         <CardBody>
           <h6 className="d-flex justify-content-between align-items-center">
@@ -80,7 +78,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
             </Badge>
           </h6>
           
-          {/* Progress Bar */}
           <div className="mb-3">
             <div className="d-flex justify-content-between mb-1">
               <small>Progress</small>
@@ -94,7 +91,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
             </div>
           </div>
 
-          {/* Timing */}
           <div className="row text-center">
             <div className="col-6">
               <div className="border-end">
@@ -110,7 +106,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
         </CardBody>
       </Card>
 
-      {/* Current Step */}
       {isTracking && currentStep < processSteps.length && (
         <Card className="mb-3 border-primary">
           <CardBody>
@@ -149,7 +144,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
         </Card>
       )}
 
-      {/* Steps List */}
       <Card>
         <CardBody>
           <h6>Process Steps</h6>
@@ -190,7 +184,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
                   </div>
                 </div>
 
-                {/* Step Status Icons */}
                 <div className="ms-2">
                   {status === 'completed' && (
                     <span className="text-success">✓</span>
@@ -208,7 +201,6 @@ const TrackingStatus: React.FC<TrackingStatusProps> = ({
         </CardBody>
       </Card>
 
-      {/* Completed Steps Summary */}
       {stepEvents.length > 0 && (
         <Card className="mt-3">
           <CardBody>

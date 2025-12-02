@@ -22,7 +22,7 @@ const ProcessStepsList: React.FC<ProcessStepsListProps> = ({
   const [newStep, setNewStep] = useState({
     StepName: '',
     TargetZoneId: 0,
-    Duration: 5, // Default 5 seconds
+    Duration: 5,
     Description: ''
   });
 
@@ -36,7 +36,6 @@ const ProcessStepsList: React.FC<ProcessStepsListProps> = ({
 
   const handleDeleteStep = (stepIndex: number) => {
     const updatedSteps = steps.filter((_, index) => index !== stepIndex);
-    // Renumber steps
     const renumberedSteps = updatedSteps.map((step, index) => ({
       ...step,
       StepNumber: index + 1
@@ -49,7 +48,6 @@ const ProcessStepsList: React.FC<ProcessStepsListProps> = ({
     const [movedStep] = updatedSteps.splice(fromIndex, 1);
     updatedSteps.splice(toIndex, 0, movedStep);
     
-    // Renumber steps
     const renumberedSteps = updatedSteps.map((step, index) => ({
       ...step,
       StepNumber: index + 1

@@ -27,12 +27,10 @@ const ZoneOverlay: React.FC<ZoneOverlayProps> = ({
     initialTop: number;
   } | null>(null);
 
-  // Placeholder for now - we'll build the drag/resize logic step by step
   return (
     <div className="position-absolute top-0 start-0 w-100 h-100">
       {zones.map(zone => (
-        <div key={zone.Id} style={{ /* zone styling */ }}>
-          {/* Individual zone component will go here */}
+        <div key={zone.Id}>
           Zone: {zone.ZoneName}
         </div>
       ))}

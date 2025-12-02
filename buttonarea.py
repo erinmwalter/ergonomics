@@ -2,16 +2,13 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# Load pose model
 pose_model = YOLO('yolo11n-pose.pt')
 
-# DEFINE YOUR BUTTON AREA HERE - Change these coordinates to match where you want the button
 BUTTON_TOP_LEFT = (300, 200)      # (x, y) top-left corner
 BUTTON_BOTTOM_RIGHT = (500, 350)  # (x, y) bottom-right corner
 button_interactions = {}
 
 def get_hand_positions(keypoints, conf_threshold=0.7):
-    """Extract left and right hand positions from pose keypoints with better accuracy"""
     hands = {'left': None, 'right': None}
     
     for person_kp in keypoints:
@@ -41,7 +38,6 @@ def get_hand_positions(keypoints, conf_threshold=0.7):
     return hands
 
 def is_hand_in_button_area(hand_pos):
-    """Check if hand is inside the button rectangle"""
     if hand_pos is None:
         return False
     
@@ -92,7 +88,6 @@ def draw_button_area(img):
     return img
 
 def draw_hand_boxes(img, hands, box_size=60):
-    """Draw bounding boxes around detected hands with confidence indicators"""
     colors = {'left': (0, 255, 0), 'right': (255, 0, 0)}
     
     for hand_type, position in hands.items():
@@ -120,7 +115,6 @@ def draw_hand_boxes(img, hands, box_size=60):
     return img
 
 def check_button_interactions(hands, frame_count):
-    """Check for hand-button interactions and log them"""
     global button_interactions
     
     # Check each hand
@@ -129,12 +123,12 @@ def check_button_interactions(hands, frame_count):
             # Check if this is a new interaction
             if hand_type not in button_interactions:
                 button_interactions[hand_type] = frame_count
-                print(f"🔴 BUTTON PRESSED! {hand_type.upper()} hand entered button area at frame {frame_count}")
+                print(f"BUTTON PRESSED! {hand_type.upper()} hand entered button area at frame {frame_count}")
         else:
             # Remove interaction if hand moved away
             if hand_type in button_interactions:
                 duration = frame_count - button_interactions[hand_type]
-                print(f"🔵 Button released by {hand_type.upper()} hand (in area for {duration} frames)")
+                print(f"Button released by {hand_type.upper()} hand (in area for {duration} frames)")
                 del button_interactions[hand_type]
 
 def main():
@@ -144,14 +138,7 @@ def main():
         print("Error: Could not open webcam")
         return
     
-    print("Rectangular Button Area Tracker Started!")
-    print("📋 Instructions:")
-    print(f"1. Button area is from {BUTTON_TOP_LEFT} to {BUTTON_BOTTOM_RIGHT}")
-    print("2. Position your paper button inside the yellow rectangle")
-    print("3. To change button area, modify BUTTON_TOP_LEFT and BUTTON_BOTTOM_RIGHT in code")
-    print("4. Move your hands into the yellow rectangle to 'press' the button")
-    print("5. Watch console for button press events!")
-    print("6. Press 'q' to quit")
+    print("Press 'q' to quit")
     
     frame_count = 0
     
@@ -162,18 +149,15 @@ def main():
         
         frame_count += 1
         
-        # Run pose detection
         pose_results = pose_model(frame, verbose=False)
         
         hands = {'left': None, 'right': None}
         
-        # Process pose results with additional validation
         for result in pose_results:
             if result.keypoints is not None and len(result.keypoints.xy) > 0:
                 keypoints = result.keypoints.xy.cpu().numpy()
                 confidences = result.keypoints.conf.cpu().numpy()
                 
-                # Only process if we actually detected a person
                 if len(keypoints) > 0 and len(keypoints[0]) > 10:
                     kp_data = []
                     for i in range(len(keypoints)):

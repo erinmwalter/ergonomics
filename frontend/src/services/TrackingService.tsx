@@ -33,7 +33,6 @@ class TrackingService {
     const params = new URLSearchParams();
     
     if (zones && zones.length > 0) {
-      // Convert to tracking format before sending
       const trackingZones = this.convertDatabaseZones(zones);
       params.append('zones', JSON.stringify(trackingZones));
     }

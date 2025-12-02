@@ -18,7 +18,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
   const [editedZone, setEditedZone] = useState<Zone | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Update local state when zone prop changes
   useEffect(() => {
     setEditedZone(zone);
     setHasChanges(false);
@@ -39,7 +38,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
 
   const handleSave = () => {
     if (editedZone && hasChanges) {
-      // Ensure coordinates are valid
       const validatedZone = {
         ...editedZone,
         Xstart: Math.min(editedZone.Xstart, editedZone.Xend - 20),
@@ -91,7 +89,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
       <CardBody>
         <h5>Zone Properties</h5>
         
-        {/* Zone Name */}
         <FormGroup>
           <Label for="zoneName">Zone Name</Label>
           <Input
@@ -102,7 +99,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
           />
         </FormGroup>
 
-        {/* Zone Color */}
         <FormGroup>
           <Label for="zoneColor">Color</Label>
           <Row>
@@ -126,7 +122,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
           </Row>
         </FormGroup>
 
-        {/* Position & Size */}
         <FormGroup>
           <Label>Position & Size</Label>
           <Row>
@@ -180,7 +175,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
           </div>
         </FormGroup>
 
-        {/* Action Buttons */}
         <div className="d-grid gap-2">
           {hasChanges && (
             <>
@@ -200,7 +194,6 @@ const ZonePropertiesPanel: React.FC<ZonePropertiesPanelProps> = ({
           )}
         </div>
 
-        {/* Zone Info */}
         <div className="mt-3 pt-3 border-top">
           <small className="text-muted">
             Created by {editedZone.CreatedBy} on {editedZone.CreatedAt}

@@ -28,10 +28,8 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
     e.preventDefault();
     e.stopPropagation();
     
-    // Select the zone
     onSelect(zone);
     
-    // Start dragging
     setIsDragging(true);
     setDragStart({
       x: e.clientX,
@@ -67,7 +65,6 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
     const deltaY = e.clientY - dragStart.y;
 
     if (isDragging) {
-      // Handle zone dragging
       const newX = dragStart.zoneStart.x + deltaX;
       const newY = dragStart.zoneStart.y + deltaY;
 
@@ -81,7 +78,6 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
 
       onUpdate(updatedZone);
     } else if (isResizing) {
-      // Handle zone resizing
       let newXstart = dragStart.zoneStart.x;
       let newYstart = dragStart.zoneStart.y;
       let newXend = dragStart.zoneStart.x + dragStart.zoneStart.width;
@@ -106,7 +102,6 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
           break;
       }
 
-      // Ensure minimum size and valid coordinates
       const minSize = 20;
       if (newXend - newXstart >= minSize && newYend - newYstart >= minSize) {
         const updatedZone: Zone = {
@@ -127,7 +122,6 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
     setIsResizing(null);
   };
 
-  // Add global mouse event listeners when dragging or resizing
   React.useEffect(() => {
     if (isDragging || isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -185,10 +179,8 @@ const ZoneBox: React.FC<ZoneBoxProps> = ({
         {zone.ZoneName}
       </div>
       
-      {/* Resize handles - only show when selected */}
       {isSelected && (
         <>
-          {/* Corner resize handles */}
           <div
             style={{
               ...handleStyle,

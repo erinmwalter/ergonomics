@@ -4,7 +4,6 @@ from typing import List, Dict, Any, Optional
 import logging
 from contextlib import contextmanager
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -279,14 +278,12 @@ class DatabaseService:
         """Replace all steps for a process with new steps"""
         with self.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                # First, soft delete all existing steps
                 cursor.execute("UPDATE public.\"ProcessSteps\" SET \"IsActive\" = false WHERE \"ProcessId\" = %s", (process_id,))
                 
-                # Then add new steps
                 for i, step in enumerate(steps):
                     self.create_process_step(
                         process_id=process_id,
-                        step_number=i + 1,  # Step numbers start at 1
+                        step_number=i + 1,
                         step_name=step['StepName'],
                         target_zone_id=step['TargetZoneId'],
                         duration=step['Duration'],
@@ -294,11 +291,9 @@ class DatabaseService:
                         created_by=step.get('CreatedBy', 'admin')
                     )
         
-        # Return updated steps with zone info
         return self.get_process_steps(process_id)
 
-
-# small main for testing the usage... will not use in actual app
+# FOR TESTING PURPOSES ONLY - TEST DIFFERENT ASPECTS OF THE DATABASE HERE (WILL NOT BE USED IN APP)
 if __name__ == "__main__":
     db = DatabaseService(database="postgres")
     

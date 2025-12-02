@@ -19,7 +19,6 @@ class ApiService {
     return response.json();
   }
 
-  // Environment methods
   async getEnvironments(): Promise<Environment[]> {
     return this.makeRequest<Environment[]>('/environments');
   }
@@ -42,7 +41,6 @@ class ApiService {
     });
   }
 
-  // Zone methods
   async getZonesForEnvironment(environmentId: number): Promise<Zone[]> {
     return this.makeRequest<Zone[]>(`/environments/${environmentId}/zones`);
   }
@@ -83,7 +81,6 @@ class ApiService {
     });
   }
 
-  // Process methods
   async getProcessesForEnvironment(environmentId: number): Promise<Process[]> {
     return this.makeRequest<Process[]>(`/environments/${environmentId}/processes`);
   }

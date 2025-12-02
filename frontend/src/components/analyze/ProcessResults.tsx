@@ -117,7 +117,6 @@ const ProcessResults: React.FC<ProcessResultsProps> = ({
         </CardBody>
       </Card>
 
-      {/* Detailed Metrics */}
       <Row className="mb-4">
         <Col md={6}>
           <Card className="h-100">
@@ -196,7 +195,6 @@ const ProcessResults: React.FC<ProcessResultsProps> = ({
         </Col>
       </Row>
 
-      {/* Step-by-Step Breakdown */}
       <Card>
         <CardBody>
           <h6>Step-by-Step Analysis</h6>
@@ -243,7 +241,6 @@ const ProcessResults: React.FC<ProcessResultsProps> = ({
         </CardBody>
       </Card>
 
-      {/* Recommendations */}
       <Card className="mt-4">
         <CardBody>
           <h6>Recommendations for Improvement</h6>
